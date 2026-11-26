@@ -1,0 +1,56 @@
+name: build-ipa-from-zip
+
+# 在 GitHub 网页上：Actions → build-ipa-from-zip → Run workflow → 等 10~15 分钟
+# 产物：Artifacts 里的 CarWithin-ipa（zip，解压后是未签名 .ipa）
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Unzip source
+        run: |
+          mkdir -p src
+          unzip -q CarWithin-src.zip -d src
+          ls src
+
+      - name: Generate Xcode project
+        working-directory: src
+        run: python3 Tools/generate_project.py
+
+      - name: Show toolchain
+        run: xcodebuild -version
+
+      - name: Build unsigned app
+        working-directory: src
+        run: |
+          set -o pipefail
+          xcodebuild -project TDSCarKit.xcodeproj -scheme TDSCarKit \
+            -configuration Release -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO | tee build.log | tail -n 60
+
+      - name: Package IPA
+        run: |
+          mkdir -p Payload
+          cp -R src/build/Build/Products/Release-iphoneos/TDSCarKit.app Payload/
+          zip -qry CarWithin-1.0.5-handlebar-unsigned.ipa Payload
+          ls -lh CarWithin-1.0.5-handlebar-unsigned.ipa
+
+      - name: Upload log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: src/build.log
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: CarWithin-ipa
+          path: CarWithin-1.0.5-handlebar-unsigned.ipa
