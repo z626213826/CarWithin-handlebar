@@ -1,0 +1,27 @@
+name: build-min
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Unzip source
+        run: |
+          mkdir -p src
+          unzip -q CarWithin-src.zip -d src
+          ls src | head -20
+      - name: Toolchain
+        run: xcodebuild -version
+      - name: Generate project
+        working-directory: src
+        run: python3 Tools/generate_project.py
+      - name: Build
+        working-directory: src
+        run: |
+          set -o pipefail
+          xcodebuild -project TDSCarKit.xcodeproj -scheme TDSCarKit \
+            -configuration Release -sdk iphoneos -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO 2>&1 | tail -n 200
